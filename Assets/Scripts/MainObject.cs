@@ -11,6 +11,8 @@ public class MainObject : MonoBehaviour
     private void OnTriggerEnter(Collider other)
     {
         collisionEventChannel.RaiseCollisionEvent(other);
+
+        Debug.Log("collision!");
     }
 
 }
