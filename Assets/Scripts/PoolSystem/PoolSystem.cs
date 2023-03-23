@@ -31,7 +31,14 @@ public class PoolSystem<T>
         }
         return element;
     }
-
+    public void ClearItems(T element)
+    {       
+            if (element.activeSelf)
+            {
+                element.SetActive(false);
+                poolList.Push(element.GetComponent<T>());
+            }       
+    }
 
     public void ClearItems(List<T> elements)
     {

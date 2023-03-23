@@ -10,7 +10,6 @@ public class MainObject : MonoBehaviour
     }
     private void OnTriggerEnter(Collider other)
     {
-        Debug.Log("CollisionDetected");
         collisionEventChannel.RaiseCollisionEvent(other);
     }
 

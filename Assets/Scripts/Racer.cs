@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class Racer : MonoBehaviour,IResettable
@@ -6,13 +7,14 @@ public class Racer : MonoBehaviour,IResettable
     private bool isAlive = true;
     [SerializeField]
     [Range(0f, 1f)]
-    private float collisionProbability = 0.01f;
-
-    [SerializeField]
     private Collider collider;
-
     [SerializeField]
-    bool updated = true;
+    private List<Racer> collisionList = new List<Racer>();
+
+    private void OnTriggerEnter(Collider other)
+    {
+        collisionList.Add(other.GetComponent<Racer>());   
+    }
 
     private void Start()
     {
@@ -36,17 +38,12 @@ public class Racer : MonoBehaviour,IResettable
         return isAlive;
     }
 
-    private IEnumerator WaitForUpdate(float time)
-    {
-        updated = false;
-        yield return new WaitForSeconds(time / 1000);
-        updated = true;
-    } 
 
     public void UpdateRacer(float time)
     {
-        if (!updated) return;
-        StartCoroutine(WaitForUpdate(time));
+        collisionList.Clear();
+        transform.position = Random.insideUnitSphere * GameManager.Get.radiusSpawnZone;
+        //Update Logic
     }
 
     public bool IsCollidable()
@@ -56,13 +53,22 @@ public class Racer : MonoBehaviour,IResettable
 
     public void Destroy()
     {
+        //Destroy if you are not using pooling system
         isAlive = false;
-        Destroy(gameObject);
+        //Destroy(gameObject);     
         Debug.Log("Destroy racer");
     }
 
     public bool CollidesWith(Racer racer)
     {
-        return Random.Range(0f, 1f) < collisionProbability * racer.collisionProbability;     
+        if (collisionList.Contains(racer))
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+
     }
 }

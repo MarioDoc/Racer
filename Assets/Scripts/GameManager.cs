@@ -1,11 +1,13 @@
 using Cinemachine;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 
 public class GameManager : MonoSingleton<GameManager>
 {
+
     [Header("Racers Config")]
     [SerializeField]
     private int initialNumberOfRacers = 100;
@@ -16,8 +18,7 @@ public class GameManager : MonoSingleton<GameManager>
     private List<Racer> racerPrefabList;
     private List<Racer> racerList = new List<Racer>();
     [Tooltip("Sphere radius of spawn volume")]
-    [SerializeField]
-    private int radiusSpawnZone = 100;
+    public int radiusSpawnZone = 100;
     private Vector3 spawnPoint = Vector3.zero;
     [SerializeField]
     private Transform spawnedObjectsParent;
@@ -47,14 +48,14 @@ public class GameManager : MonoSingleton<GameManager>
     [Range(1f, 100f)]
     private float mainObjectSpeed;
     [SerializeField]
-    private List<Transform> movementPoints = new List<Transform>();
+    private List<Transform> movementPoints;
     private Rigidbody mainObjectRigidBody;
 
     [Space]
     [Header("Collisions")]
     [SerializeField]
     private CollisionEventChannel collisionEventChannel;
-    public CollisionEventChannel CollisionChannel { get => collisionEventChannel; private set => collisionEventChannel = value;   }
+    public CollisionEventChannel CollisionChannel { get => collisionEventChannel; private set => collisionEventChannel = value; }
     [SerializeField]
     private ParticleSystem explosionParticleSystemPrefab;
     private ParticleSystem explosionParticleSystem;
@@ -81,7 +82,7 @@ public class GameManager : MonoSingleton<GameManager>
         InitRacers();
 
         oldUpdateButton.onClick.AddListener(() => UpdateRacers(racersUpdateTime, racerList));
-        optimizedUpdateButton.onClick.AddListener(() => OptimizedUpdateRacers(racersUpdateTime,ref racerList));
+        optimizedUpdateButton.onClick.AddListener(() => NewBehaivourUpdateRacers(racersUpdateTime, racerList));
         moveMainGameObject.onClick.AddListener(() => movementCoroutine = StartCoroutine(MoveMainObject(movementPoints)));
         resetButton.onClick.AddListener(Reset);
     }
@@ -90,7 +91,7 @@ public class GameManager : MonoSingleton<GameManager>
     {
         if (collider)
         {
-            
+
             collisionDetected = true;
             //To reduce physics callbacks
             mainCollider.enabled = false;
@@ -123,7 +124,7 @@ public class GameManager : MonoSingleton<GameManager>
             explosionParticleSystem = Instantiate(explosionParticleSystemPrefab);
         }
         explosionParticleSystem.Stop();
-        
+
         if (movementCoroutine != null)
         {
             StopCoroutine(movementCoroutine);
@@ -190,58 +191,6 @@ public class GameManager : MonoSingleton<GameManager>
         }
     }
 
-    void OptimizedUpdateRacers(float deltaTimeS, ref List<Racer> racers)
-    {
-        // Gets the racers that are still alive. Initialize by 
-        List<Racer> newRacerList = new(racers);
-        List<Racer> racersNeedingRemoved = new List<Racer>();
-
-        // Updates the racers that are alive
-        for (int racerIndex = 0; racerIndex < racers.Count; racerIndex++)
-        {
-            if (racers[racerIndex].IsAlive())
-            {
-                //Racer update takes milliseconds
-                racers[racerIndex].UpdateRacer(deltaTimeS * 1000.0f);
-            }
-        }
-
-        // Collides
-        //FIX: we only have to check the collision once between the same 2 racers
-        //the loops has less iterations
-        for (int racerIndex1 = 0; racerIndex1 < racers.Count; racerIndex1++)
-        {
-            Racer racer1 = racers[racerIndex1];
-
-            for (int racerIndex2 = racerIndex1 + 1; racerIndex2 < racers.Count; racerIndex2++)
-            {
-                Racer racer2 = racers[racerIndex2];
-
-                if (racer1.IsCollidable() && racer2.IsCollidable() && racer1.CollidesWith(racer2))
-                {
-                    OnRacerExplodes(racer1);
-                    racersNeedingRemoved.Add(racer1);
-                    racersNeedingRemoved.Add(racer2);
-                    newRacerList.Remove(racer1);
-                    newRacerList.Remove(racer2);
-                }
-
-            }
-        }
-
-        // Get rid of all the exploded racers
-        for (int racerIndex = 0; racerIndex < racersNeedingRemoved.Count; racerIndex++)
-        {
-            racersNeedingRemoved[racerIndex].Destroy();
-        }
-
-        //poolingSystem.ClearItems(racersNeedingRemoved);
-
-        racers = newRacerList;
-        
-    }
-
-
     void UpdateRacers(float deltaTimeS, List<Racer> racers)
     {
         updateComputingTime = 0;
@@ -275,6 +224,7 @@ public class GameManager : MonoSingleton<GameManager>
                 {
                     if (racer1.IsCollidable() && racer2.IsCollidable() && racer1.CollidesWith(racer2))
                     {
+                        collisionCheckCount++;
                         OnRacerExplodes(racer1);
                         racersNeedingRemoved.Add(racer1);
                         racersNeedingRemoved.Add(racer2);
@@ -298,11 +248,13 @@ public class GameManager : MonoSingleton<GameManager>
             int foundRacerIndex = racers.IndexOf(racersNeedingRemoved[racerIndex]);
             if (foundRacerIndex >= 0) // Check we've not removed this already!
             {
-                collisionCheckCount++;
                 racersNeedingRemoved[racerIndex].Destroy();
                 racers.Remove(racersNeedingRemoved[racerIndex]);
             }
         }
+
+        poolingSystem.ClearItems(racersNeedingRemoved);
+
         // Builds the list of remaining racers
         racers.Clear();
         for (racerIndex = 0; racerIndex < newRacerList.Count; racerIndex++)
@@ -316,9 +268,125 @@ public class GameManager : MonoSingleton<GameManager>
         }
 
         racerList = racers;
-        Debug.Log("Collision Check Count " + collisionCheckCount);
-        collisionCheckCount = 0;
+        Debug.Log("Collisions DETECTED " + collisionCheckCount);
         Debug.Log("Active racers AFTER UPDATE" + racers.Count);
-        Debug.Log("Computing time " + updateComputingTime);
+        collisionCheckCount = 0;
     }
+
+    void OptimizedUpdateRacers(float deltaTimeS, List<Racer> racers)
+    {
+        Debug.Log("Active racers BEFORE UPDATE" + racers.Count);
+
+        // Gets the racers that are still alive. Initialize by 
+        List<Racer> racersNeedingRemoved = new List<Racer>();
+
+        // Updates the racers that are alive
+        for (int racerIndex = 0; racerIndex < racers.Count; racerIndex++)
+        {
+            if (racers[racerIndex].IsAlive())
+            {
+                //Racer update takes milliseconds
+                racers[racerIndex].UpdateRacer(deltaTimeS * 1000.0f);
+            }
+        }
+
+        // Collides
+        //FIX: we only have to check the collision once between the same 2 racers
+        //the loops has less iterations
+        for (int racerIndex1 = 0; racerIndex1 < racers.Count; racerIndex1++)
+        {
+            Racer racer1 = racers[racerIndex1];
+
+            for (int racerIndex2 = racerIndex1 + 1; racerIndex2 < racers.Count; racerIndex2++)
+            {
+                Racer racer2 = racers[racerIndex2];
+
+                if (racer1.IsCollidable() && racer2.IsCollidable() && racer1.CollidesWith(racer2))
+                {
+                    collisionCheckCount++;
+
+                    OnRacerExplodes(racer1);
+                    //To preseerve the number of OnRacerExplodes calls we have to call it also with racer2 since we have reduced the loop iterations
+                    OnRacerExplodes(racer2);
+                    racersNeedingRemoved.Add(racer1);
+                    racersNeedingRemoved.Add(racer2);
+                }
+            }
+        }
+        //Requiers "using System.Linq;". Removes duplicated elements, 
+        racersNeedingRemoved = racersNeedingRemoved.Distinct().ToList();
+        // Get rid of all the exploded racers
+        //The destroy is not needed anymore if you use the pooling system but you can keep it to implements additional logic
+        racersNeedingRemoved.ForEach(i => i.Destroy());
+        //update racers List
+        racers.RemoveAll(i => racersNeedingRemoved.Contains(i));
+        Debug.Log("Collisions DETECTED " + collisionCheckCount);
+        Debug.Log("Active racers AFTER UPDATE" + racers.Count);
+
+        poolingSystem.ClearItems(racersNeedingRemoved);
+    }
+
+
+    void NewBehaivourUpdateRacers(float deltaTimeS, List<Racer> racers)
+    {
+        Debug.Log("Active racers BEFORE UPDATE" + racers.Count);
+        optimizedUpdateButton.interactable = false;
+        // Updates the racers that are alive
+        for (int racerIndex = 0; racerIndex < racers.Count; racerIndex++)
+        {
+            if (racers[racerIndex].IsAlive())
+            {
+                //Racer update takes milliseconds
+                racers[racerIndex].UpdateRacer(deltaTimeS * 1000.0f);
+            }
+        }
+
+        StartCoroutine(CheckCollisions(racers, racers.Count*deltaTimeS));
+        
+        Debug.Log("Collisions DETECTED " + collisionCheckCount);
+
+        Debug.Log("Active racers AFTER UPDATE" + racers.Count);
+    }
+
+    private IEnumerator CheckCollisions(List<Racer> racers, float delayTime)
+    {
+       yield return new WaitForSeconds(delayTime);
+        // Collides
+        //FIX: we only have to check the collision once between the same 2 racers
+        //the loops has less iterations
+        //Changing the loop to inverse order allow us to modify the iteration list while executing the loop
+        for (int racerIndex1 = racers.Count - 1; racerIndex1 >= 0; racerIndex1--)
+        {
+            Racer racer1 = racers[racerIndex1];
+
+            //indicates the need to modify the racer list
+            bool needsToRemove = false;
+            for (int racerIndex2 = racerIndex1 - 1; racerIndex2 >= 0; racerIndex2--)
+            {
+                Racer racer2 = racers[racerIndex2];
+
+                if (racer1.IsCollidable() && racer2.IsCollidable() && racer1.CollidesWith(racer2))
+                {
+                    collisionCheckCount++;
+
+                    OnRacerExplodes(racer1);
+                    OnRacerExplodes(racer2);
+                    needsToRemove = true;
+                }
+            }
+            if (needsToRemove)
+            {
+                racers.Remove(racer1);
+                poolingSystem.ClearItems(racer1);
+                //The destroy is nor needed anymore if you use the pooling system but you can keep it if it implements additional logic
+                //racer1.Destroy();
+            }
+        }
+
+        optimizedUpdateButton.interactable = true;
+
+    }
+
+
+
 }

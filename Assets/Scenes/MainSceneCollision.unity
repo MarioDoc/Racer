@@ -446,12 +446,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   initialNumberOfRacers: 100
-  racersUpdateTime: 5
+  racersUpdateTime: 0.01
   racerPrefabList:
   - {fileID: 3303336689216913743, guid: 3c97c83483eac914d9174a83cef9dcc6, type: 3}
   - {fileID: 5914381125455954041, guid: fc8e08973868e7d45a6bdd752416e273, type: 3}
   - {fileID: 1899889300980014134, guid: dae3cd933b3d0da4db94071c91b5a4d4, type: 3}
-  radiusSpawnZone: 100
+  radiusSpawnZone: 50
   spawnedObjectsParent: {fileID: 1044974675}
   oldUpdateButton: {fileID: 2008401328}
   optimizedUpdateButton: {fileID: 1810455586}
